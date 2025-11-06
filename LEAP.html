@@ -10572,12 +10572,67 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     /**
-     * The main question bank pulled from the JSON payload above.
+     * Hydrate and normalize the question bank from the embedded JSON payload.
+     * This ensures duplicate items (based on text/options/answers) are removed
+     * before the data is frozen for use throughout the assessment flow.
      */
-        
-    const questionBank = Object.freeze(
-        JSON.parse(document.getElementById('question-bank-data').textContent)
+
+    const rawQuestionBank = JSON.parse(
+        document.getElementById('question-bank-data').textContent
     );
+
+    const questionIdentity = (item) =>
+        JSON.stringify({
+            text:
+                typeof item.text === 'string'
+                    ? item.text.replace(/\s+/g, ' ').trim()
+                    : null,
+            prompt:
+                typeof item.prompt === 'string'
+                    ? item.prompt.replace(/\s+/g, ' ').trim()
+                    : null,
+            options: item.options ?? null,
+            answer: item.answer ?? item.answers ?? null,
+            level: item.level ?? null,
+            domain: item.domain ?? null,
+            passageId: item.passageId ?? null,
+        });
+
+    const dedupeQuestions = (domain, questions) => {
+        const seen = new Set();
+        return questions.filter((item) => {
+            const key = questionIdentity(item);
+            if (seen.has(key)) {
+                console.warn(
+                    `Duplicate question removed from ${domain}: ${
+                        item.text ?? item.prompt ?? 'unknown prompt'
+                    }`
+                );
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+    };
+
+    const normalizeQuestionBank = (bank) =>
+        Object.fromEntries(
+            Object.entries(bank).map(([domain, items]) => [
+                domain,
+                Array.isArray(items) ? dedupeQuestions(domain, items) : items,
+            ])
+        );
+
+    const deepFreeze = (value) => {
+        if (Array.isArray(value)) {
+            value.forEach(deepFreeze);
+        } else if (value && typeof value === 'object') {
+            Object.values(value).forEach(deepFreeze);
+        }
+        return Object.freeze(value);
+    };
+
+    const questionBank = deepFreeze(normalizeQuestionBank(rawQuestionBank));
 
     // =================================================================
     // == APPLICATION STATE & CONSTANTS

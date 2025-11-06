@@ -10794,6 +10794,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /**
+     * Helper: Ensure a question pool has the requested number of entries.
+     * Throws a descriptive error if there are not enough items.
+     */
+    function ensureEnoughItems(domain, pool, requested, descriptor = 'questions') {
+        const available = Array.isArray(pool) ? pool.length : 0;
+        if (requested > available) {
+            throw new Error(
+                `Insufficient ${descriptor} for ${domain}: requested ${requested}, found ${available}.`
+            );
+        }
+    }
+
+    /**
      * Helper function: Groups an array of objects by a key.
      * Used for grouping reading questions by 'passageId'.
      */
@@ -10814,22 +10827,37 @@ document.addEventListener("DOMContentLoaded", () => {
      * @param {Array} bank - The domain's question bank.
      * @param {object} profile - e.g., { b1: 2, b2: 5, c1: 3 }
      */
-    function sampleStratified(bank, profile) {
+    function sampleStratified(bank, profile, domainLabel = 'Domain') {
         if (!bank || bank.length === 0) {
-            console.error('Stratified sampling: Bank is empty for profile:', profile);
-            return [];
+            throw new Error(`Stratified sampling failed: ${domainLabel} bank is empty.`);
         }
+
+        const desiredB1 = Number(profile?.b1 ?? 0) || 0;
+        const desiredB2 = Number(profile?.b2 ?? 0) || 0;
+        const desiredC1 = Number(profile?.c1 ?? 0) || 0;
+
         // 1. Split the bank into sub-banks by level
-        const b1Bank = bank.filter(q => q.level === 'B1');
-        const b2Bank = bank.filter(q => q.level === 'B2');
-        const c1Bank = bank.filter(q => q.level === 'C1');
+        const b1Bank = bank.filter((q) => q.level === 'B1');
+        const b2Bank = bank.filter((q) => q.level === 'B2');
+        const c1Bank = bank.filter((q) => q.level === 'C1');
 
-        // 2. Sample from each sub-bank according to the profile
-        const b1Questions = sampleFrom(b1Bank, profile.b1);
-        const b2Questions = sampleFrom(b2Bank, profile.b2);
-        const c1Questions = sampleFrom(c1Bank, profile.c1);
+        // 2. Validate pool sizes before sampling
+        if (desiredB1 > 0) {
+            ensureEnoughItems(`${domainLabel} (B1)`, b1Bank, desiredB1);
+        }
+        if (desiredB2 > 0) {
+            ensureEnoughItems(`${domainLabel} (B2)`, b2Bank, desiredB2);
+        }
+        if (desiredC1 > 0) {
+            ensureEnoughItems(`${domainLabel} (C1)`, c1Bank, desiredC1);
+        }
 
-        // 3. Combine and re-shuffle to mix the question levels
+        // 3. Sample from each sub-bank according to the profile
+        const b1Questions = sampleFrom(b1Bank, desiredB1);
+        const b2Questions = sampleFrom(b2Bank, desiredB2);
+        const c1Questions = sampleFrom(c1Bank, desiredC1);
+
+        // 4. Combine and re-shuffle to mix the question levels
         const combined = [...b1Questions, ...b2Questions, ...c1Questions];
         return combined.sort(() => 0.5 - Math.random());
     }
@@ -10902,19 +10930,24 @@ document.addEventListener("DOMContentLoaded", () => {
         // --- Define the difficulty profiles for each domain ---
         const grammarProfile = { b1: 3, b2: 6, c1: 3 }; // (12 Qs)
         const standardProfile = { b1: 2, b2: 5, c1: 3 }; // (10 Qs)
+        const calpProfile = { b1: 0, b2: 6, c1: 4 }; // (10 Qs, B2/C1 only)
         
         // --- 1. Sample all domains into their own arrays ---
-        const grammarQs = sampleStratified(questionBank.grammar, grammarProfile);
-        const writingQs = sampleStratified(questionBank.writing, standardProfile);
-        const lexicalQs = sampleStratified(questionBank.lexical, standardProfile);
-        const mechanicsQs = sampleStratified(questionBank.mechanics, standardProfile);
-        const pragmaticQs = sampleStratified(questionBank.pragmatic, standardProfile);
-        const calpQs = sampleStratified(questionBank.calp, standardProfile);
+        const grammarQs = sampleStratified(questionBank.grammar, grammarProfile, 'Grammar & Syntax');
+        const writingQs = sampleStratified(questionBank.writing, standardProfile, 'Writing Mechanics');
+        const lexicalQs = sampleStratified(questionBank.lexical, standardProfile, 'Lexical Range');
+        const mechanicsQs = sampleStratified(questionBank.mechanics, standardProfile, 'Mechanics & Orthography');
+        const pragmaticQs = sampleStratified(questionBank.pragmatic, standardProfile, 'Pragmatic & Sociolinguistic');
+        const calpQs = sampleStratified(questionBank.calp, calpProfile, 'CALP (Cognitive-Academic)');
+
+        ensureEnoughItems('Reflection prompts', questionBank.reflection, REFLECTION_QUESTIONS_COUNT, 'prompts');
         const reflectionQs = sampleFrom(questionBank.reflection, REFLECTION_QUESTIONS_COUNT);
 
         // --- 2. Handle Reading Domain (Cluster) ---
         const readingClusters = Object.values(groupBy(questionBank.reading, 'passageId'));
-        const sampledClusters = sampleFrom(readingClusters, 2); // 2 Passages
+        const REQUIRED_READING_PASSAGES = 2;
+        ensureEnoughItems('Reading passages', readingClusters, REQUIRED_READING_PASSAGES, 'passages');
+        const sampledClusters = sampleFrom(readingClusters, REQUIRED_READING_PASSAGES); // 2 Passages
         
         // FIX: Use .reduce() for compatibility instead of .flat()
         const readingQs = sampledClusters.reduce((acc, val) => acc.concat(val), []);

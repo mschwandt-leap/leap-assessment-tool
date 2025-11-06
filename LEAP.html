@@ -10575,11 +10575,9 @@ document.addEventListener("DOMContentLoaded", () => {
      * The main question bank pulled from the JSON payload above.
      */
         
-        const questionBank = Object.freeze(
-            JSON.parse(document.getElementById('question-bank-data').textContent)
-        );
-
-
+    const questionBank = Object.freeze(
+        JSON.parse(document.getElementById('question-bank-data').textContent)
+    );
 
     // =================================================================
     // == APPLICATION STATE & CONSTANTS
@@ -10709,6 +10707,9 @@ document.addEventListener("DOMContentLoaded", () => {
             // --- Store State ---
             appState.studentName = name;
             appState.studentGrade = grade;
+            appState.currentQuestionIndex = 0;
+            appState.lastPassageId = null;
+            appState.scores = null;
             appState.testQuestions = generateTestQuestions();
             
             // Check if test generation failed
@@ -10718,7 +10719,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             
-            appState.userAnswers = new Array(appState.testQuestions.length).fill(null);
+            const totalQuestions = appState.testQuestions.length;
+            appState.userAnswers = new Array(totalQuestions).fill(null);
+
+            // Reset progress indicators for the new run
+            $progressBar.style.width = '0%';
+            $progressText.textContent = `You are about to begin the test. (${totalQuestions} questions)`;
+            $passageContainer.innerHTML = '';
+            $passageContainer.style.display = 'none';
 
             // --- Update UI ---
             $startScreen.classList.remove('active');
@@ -10787,8 +10795,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // --- Update Progress ---
         const totalQuestions = appState.testQuestions.length;
-        const progressPercent = ((index) / totalQuestions) * 100;
-        $progressBar.style.width = `${progressPercent}%`;
+        const safeTotal = Math.max(totalQuestions, 1);
+        const progressPercent = ((index + 1) / safeTotal) * 100;
+        $progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
         $progressText.textContent = `Question ${index + 1} of ${totalQuestions}`;
         
         // --- Handle Reading Passage ---
@@ -10855,10 +10864,11 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderTransitionScreen(domain) {
         const index = appState.currentQuestionIndex;
         const totalQuestions = appState.testQuestions.length;
+        const safeTotal = Math.max(totalQuestions, 1);
 
         // Update Progress
-        const progressPercent = ((index) / totalQuestions) * 100;
-        $progressBar.style.width = `${progressPercent}%`;
+        const progressPercent = (index / safeTotal) * 100;
+        $progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
         
         // Set informative text
         if (index === 0) {

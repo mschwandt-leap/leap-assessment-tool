@@ -10647,18 +10647,49 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById('question-bank-data').textContent
     );
 
+    const normalizeWhitespace = (value) =>
+        typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : value ?? null;
+
+    const normalizeArrayForIdentity = (values) => {
+        if (!Array.isArray(values)) {
+            return values ?? null;
+        }
+
+        return values
+            .map((entry) => {
+                const normalized = normalizeWhitespace(entry);
+                return normalized === null || normalized === undefined
+                    ? null
+                    : String(normalized);
+            })
+            .sort((a, b) => {
+                if (a === b) return 0;
+                if (a === null) return -1;
+                if (b === null) return 1;
+                return a.localeCompare(b);
+            });
+    };
+
+    const normalizeAnswer = (item) => {
+        const answer = item.answer ?? item.answers ?? null;
+        return Array.isArray(answer)
+            ? normalizeArrayForIdentity(answer)
+            : normalizeWhitespace(answer);
+    };
+
+    const normalizeOptions = (item) => {
+        const { options } = item;
+        return Array.isArray(options)
+            ? normalizeArrayForIdentity(options)
+            : options ?? null;
+    };
+
     const questionIdentity = (item) =>
         JSON.stringify({
-            text:
-                typeof item.text === 'string'
-                    ? item.text.replace(/\s+/g, ' ').trim()
-                    : null,
-            prompt:
-                typeof item.prompt === 'string'
-                    ? item.prompt.replace(/\s+/g, ' ').trim()
-                    : null,
-            options: item.options ?? null,
-            answer: item.answer ?? item.answers ?? null,
+            text: normalizeWhitespace(item.text),
+            prompt: normalizeWhitespace(item.prompt),
+            options: normalizeOptions(item),
+            answer: normalizeAnswer(item),
             level: item.level ?? null,
             domain: item.domain ?? null,
             passageId: item.passageId ?? null,

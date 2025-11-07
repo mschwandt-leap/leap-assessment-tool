@@ -11234,10 +11234,17 @@ document.addEventListener("DOMContentLoaded", () => {
             (event.ctrlKey && event.shiftKey && event.key === 'I') || // Ctrl+Shift+I
             (event.ctrlKey && event.shiftKey && event.key === 'J') || // Ctrl+Shift+J
             (event.ctrlKey && event.key === 'U') || // Ctrl+U (View Source)
-            ((navigator.platform.match("Mac") ? event.metaKey : event.ctrlKey) && event.key === 'S') // Ctrl/Cmd+S (Save)
+            ((navigator.platform.match("Mac") ? event.metaKey : event.ctrlKey) && event.key === 'S') || // Ctrl/Cmd+S (Save)
+            event.key === 'F5' || // F5 (Refresh)
+            ((navigator.platform.match("Mac") ? event.metaKey : event.ctrlKey) && event.key.toLowerCase() === 'r') // Ctrl/Cmd+R (Refresh)
         ) {
             event.preventDefault();
         }
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        event.preventDefault();
+        event.returnValue = '';
     });
     
     // --- End: Anti-Tamper Deterrents ---

@@ -11460,6 +11460,130 @@ document.addEventListener("DOMContentLoaded", () => {
         scores: null
     };
 
+    const STORAGE_KEY = 'ell-assessment-state-v1';
+    let isRestoringState = false;
+
+    const safeSessionStorage = (() => {
+        try {
+            const { sessionStorage } = window;
+            const testKey = '__ell_test__';
+            sessionStorage.setItem(testKey, 'ok');
+            sessionStorage.removeItem(testKey);
+            return sessionStorage;
+        } catch (error) {
+            console.warn('SessionStorage is not available. Refresh persistence disabled.', error);
+            return null;
+        }
+    })();
+
+    function determineActiveScreen() {
+        if ($resultsScreen.classList.contains('active')) return 'results';
+        if ($testScreen.classList.contains('active')) return 'test';
+        return 'start';
+    }
+
+    function persistState(options = {}) {
+        if (!safeSessionStorage || isRestoringState) {
+            return;
+        }
+
+        try {
+            const isTransitionScreen = options.isTransition ?? ($nextBtn?.textContent === 'Start Section');
+            const activeScreen = options.activeScreen || determineActiveScreen();
+            const transitionDomain = isTransitionScreen
+                ? (options.transitionDomain || appState.testQuestions?.[appState.currentQuestionIndex]?.domain || null)
+                : null;
+
+            const payload = {
+                appState: {
+                    ...appState
+                },
+                ui: {
+                    activeScreen,
+                    isTransition: isTransitionScreen,
+                    transitionDomain,
+                    progressBarWidth: $progressBar?.style.width ?? null,
+                    progressText: $progressText?.textContent ?? null,
+                    nextButtonText: $nextBtn?.textContent ?? null
+                }
+            };
+
+            safeSessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (error) {
+            console.warn('Failed to persist assessment state:', error);
+        }
+    }
+
+    function clearPersistedState() {
+        if (!safeSessionStorage) return;
+        try {
+            safeSessionStorage.removeItem(STORAGE_KEY);
+        } catch (error) {
+            console.warn('Failed to clear persisted assessment state:', error);
+        }
+    }
+
+    function restoreStateIfAvailable() {
+        if (!safeSessionStorage) {
+            return;
+        }
+
+        const saved = safeSessionStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+            return;
+        }
+
+        try {
+            isRestoringState = true;
+            const parsed = JSON.parse(saved);
+            const { appState: savedState, ui } = parsed || {};
+
+            if (!savedState || !Array.isArray(savedState.testQuestions)) {
+                throw new Error('Saved state is missing question data.');
+            }
+
+            appState = {
+                ...appState,
+                ...savedState,
+                testQuestions: savedState.testQuestions || [],
+                userAnswers: savedState.userAnswers || []
+            };
+
+            $startScreen.classList.remove('active');
+            $testScreen.classList.remove('active');
+            $resultsScreen.classList.remove('active');
+
+            const activeScreen = ui?.activeScreen || 'start';
+            if (activeScreen === 'results') {
+                $resultsScreen.classList.add('active');
+                $resultsName.textContent = appState.studentName || '';
+                if (appState.scores) {
+                    $resultsScore.textContent = `Overall Score: ${appState.scores.overallPercentage.toFixed(1)}%`;
+                    $resultsCEFR.textContent = `Estimated CEFR Level: ${appState.scores.cefrLevel}`;
+                }
+                $startScreen.classList.remove('active');
+            } else if (activeScreen === 'test' && appState.testQuestions.length > 0) {
+                $testScreen.classList.add('active');
+                $progressBar.style.width = ui?.progressBarWidth ?? '0%';
+                $progressText.textContent = ui?.progressText ?? '';
+
+                if (ui?.isTransition) {
+                    renderTransitionScreen(ui.transitionDomain || appState.testQuestions[appState.currentQuestionIndex]?.domain || 'Next Section');
+                } else {
+                    renderQuestion(appState.currentQuestionIndex);
+                }
+            } else {
+                $startScreen.classList.add('active');
+            }
+        } catch (error) {
+            console.warn('Failed to restore saved assessment state:', error);
+            clearPersistedState();
+        } finally {
+            isRestoringState = false;
+            persistState();
+        }
+    }
+
 
     // =================================================================
     // == CORE FUNCTIONS (v2 - Stratified & Cluster Sampling)
@@ -11571,6 +11695,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             $startValidation.style.display = 'none';
 
+            clearPersistedState();
+
             // --- Store State ---
             appState.studentName = name;
             appState.studentGrade = grade;
@@ -11598,9 +11724,10 @@ document.addEventListener("DOMContentLoaded", () => {
             // --- Update UI ---
             $startScreen.classList.remove('active');
             $testScreen.classList.add('active');
-            
+
             // MODIFIED: Render the first transition screen instead of the first question
             renderTransitionScreen(appState.testQuestions[0].domain);
+            persistState({ activeScreen: 'test', isTransition: true, transitionDomain: appState.testQuestions[0].domain });
         } catch (error) {
             console.error("Error during startTest:", error);
             alert("An error occurred while starting the test. Please check the console for details.");
@@ -11690,7 +11817,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // --- Render Question Text ---
         $questionText.textContent = question.text;
-        $questionText.style.whiteSpace = 'pre-wrap'; 
+        $questionText.style.whiteSpace = 'pre-wrap';
 
         // --- Render Answer Options ---
         $answerOptions.innerHTML = ''; 
@@ -11728,6 +11855,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             $nextBtn.textContent = 'Next';
         }
+
+        persistState({ activeScreen: 'test', isTransition: false });
     }
 
     /**
@@ -11757,8 +11886,10 @@ document.addEventListener("DOMContentLoaded", () => {
         $questionText.innerHTML = 'You are about to begin the next section:';
         $questionText.style.whiteSpace = 'normal';
         $answerOptions.innerHTML = `<h2 style="text-align: center; margin-top: 20px;">${domain}</h2>`;
-        
+
         $nextBtn.textContent = 'Start Section';
+
+        persistState({ activeScreen: 'test', isTransition: true, transitionDomain: domain });
     }
     
     /**
@@ -11794,7 +11925,9 @@ document.addEventListener("DOMContentLoaded", () => {
             question: currentQuestion,
             userAnswer: selectedAnswer
         };
-        
+
+        persistState({ activeScreen: 'test', isTransition: false });
+
         return true; // Validation passed
     }
 
@@ -11871,6 +12004,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         $testScreen.classList.remove('active');
         $resultsScreen.classList.add('active');
+
+        persistState({ activeScreen: 'results', isTransition: false });
     }
 
     /**
@@ -12147,6 +12282,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
         console.error("Download PDF Button not found!");
     }
+
+    restoreStateIfAvailable();
 
 });
 </script>

@@ -10964,14 +10964,15 @@ document.addEventListener("DOMContentLoaded", () => {
             : options ?? null;
     };
 
+    // Build an identity hash for each question that ignores metadata like
+    // level so duplicate prompts with identical text/options/answers are
+    // collapsed regardless of proficiency tagging.
     const questionIdentity = (item) =>
         JSON.stringify({
             text: normalizeWhitespace(item.text),
             prompt: normalizeWhitespace(item.prompt),
             options: normalizeOptions(item),
             answer: normalizeAnswer(item),
-            level: item.level ?? null,
-            domain: item.domain ?? null,
             passageId: item.passageId ?? null,
         });
 

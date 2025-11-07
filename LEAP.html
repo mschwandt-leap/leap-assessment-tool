@@ -11828,17 +11828,23 @@ document.addEventListener("DOMContentLoaded", () => {
         $progressText.textContent = `Question ${index + 1} of ${totalQuestions}`;
         
         // --- Handle Reading Passage ---
-        if (question.passageId && question.passageId !== appState.lastPassageId) {
-            // Check if passage exists
-            if (readingPassages[question.passageId]) {
-                $passageContainer.innerHTML = readingPassages[question.passageId];
-                $passageContainer.style.display = 'block';
+        if (question.passageId) {
+            const passageChanged = question.passageId !== appState.lastPassageId;
+            const passageMissingFromDom = $passageContainer.innerHTML.trim() === '';
+
+            if (passageChanged || passageMissingFromDom) {
+                if (readingPassages[question.passageId]) {
+                    $passageContainer.innerHTML = readingPassages[question.passageId];
+                    $passageContainer.style.display = 'block';
+                } else {
+                    console.warn(`Passage with ID '${question.passageId}' not found.`);
+                    $passageContainer.style.display = 'none';
+                }
+                appState.lastPassageId = question.passageId;
             } else {
-                console.warn(`Passage with ID '${question.passageId}' not found.`);
-                $passageContainer.style.display = 'none';
+                $passageContainer.style.display = 'block';
             }
-            appState.lastPassageId = question.passageId;
-        } else if (!question.passageId) {
+        } else {
             $passageContainer.style.display = 'none';
             appState.lastPassageId = null;
         }

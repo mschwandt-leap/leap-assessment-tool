@@ -11414,6 +11414,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const $studentName = $('#student-name');
     const $studentGrade = $('#student-grade');
     const $startValidation = $('#start-validation-message');
+
+    $studentName.addEventListener('input', () => {
+        if ($studentName.value.trim()) {
+            $studentName.classList.remove('validation-error');
+            $startValidation.style.display = 'none';
+        }
+    });
+
+    $studentGrade.addEventListener('change', () => {
+        if ($studentGrade.value.trim()) {
+            $studentGrade.classList.remove('validation-error');
+            $startValidation.style.display = 'none';
+        }
+    });
     
     const $progressBar = $('#progress-bar');
     const $progressText = $('#progress-text');

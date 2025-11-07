@@ -80,13 +80,14 @@
             margin-bottom: 5px;
         }
 
-        .input-group input[type="text"] {
+        .input-group input[type="text"],
+        .input-group select {
             width: 100%;
             padding: 12px;
             font-size: 16px;
             border: 1px solid #ccc;
             border-radius: 5px;
-            box-sizing: border-box; 
+            box-sizing: border-box;
         }
 
         .btn {
@@ -248,7 +249,15 @@
             
             <div class="input-group">
                 <label for="student-grade">Grade</label>
-                <input type="text" id="student-grade" placeholder="e.g., 10">
+                <select id="student-grade">
+                    <option value="" disabled selected>Select grade</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="Other">Other</option>
+                </select>
             </div>
             
             <p id="start-validation-message" class="validation-message">Please fill out both fields.</p>

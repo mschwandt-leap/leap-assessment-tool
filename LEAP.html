@@ -11329,7 +11329,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let fullscreenExitLocked = false;
 
-    const handleFullscreenExitKeydown = (event) => {
+    const handleFullscreenExitKeyEvent = (event) => {
         if (!fullscreenExitLocked) {
             return;
         }
@@ -11347,7 +11347,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    document.addEventListener('keydown', handleFullscreenExitKeydown, true);
+    document.addEventListener('keydown', handleFullscreenExitKeyEvent, true);
+    document.addEventListener('keyup', handleFullscreenExitKeyEvent, true);
+
+    const syncFullscreenLockState = () => {
+        fullscreenExitLocked = Boolean(
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.msFullscreenElement
+        );
+    };
+
+    document.addEventListener('fullscreenchange', syncFullscreenLockState);
+    document.addEventListener('webkitfullscreenchange', syncFullscreenLockState);
+    document.addEventListener('msfullscreenchange', syncFullscreenLockState);
 
     // Disable keyboard shortcuts for developer tools
     document.addEventListener('keydown', function(event) {

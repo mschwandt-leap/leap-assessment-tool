@@ -11358,9 +11358,20 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     };
 
+    const handleFullscreenError = (event) => {
+        fullscreenExitLocked = false;
+        console.warn('Fullscreen request failed:', event);
+        syncFullscreenLockState();
+    };
+
     document.addEventListener('fullscreenchange', syncFullscreenLockState);
     document.addEventListener('webkitfullscreenchange', syncFullscreenLockState);
     document.addEventListener('msfullscreenchange', syncFullscreenLockState);
+    document.addEventListener('fullscreenerror', handleFullscreenError);
+    document.addEventListener('webkitfullscreenerror', handleFullscreenError);
+    document.addEventListener('msfullscreenerror', handleFullscreenError);
+
+    syncFullscreenLockState();
 
     // Disable keyboard shortcuts for developer tools
     document.addEventListener('keydown', function(event) {
@@ -12345,23 +12356,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function exitFullscreen() {
         const doc = document;
+        const finalizeLockState = () => {
+            syncFullscreenLockState();
+        };
+
+        const handleExitError = (err) => {
+            console.warn(`Exiting fullscreen failed: ${err.message}`);
+            finalizeLockState();
+        };
+
         fullscreenExitLocked = false;
+
         if (doc.fullscreenElement && doc.exitFullscreen) {
-            doc.exitFullscreen().catch(err => {
-                console.warn(`Exiting fullscreen failed: ${err.message}`);
-            });
+            try {
+                const result = doc.exitFullscreen();
+                if (result && typeof result.then === 'function') {
+                    result.then(finalizeLockState).catch(handleExitError);
+                } else {
+                    finalizeLockState();
+                }
+            } catch (err) {
+                handleExitError(err);
+            }
         } else if (doc.webkitFullscreenElement && doc.webkitExitFullscreen) { /* Safari */
             try {
                 doc.webkitExitFullscreen();
             } catch (err) {
-                console.warn(`Exiting fullscreen failed: ${err.message}`);
+                handleExitError(err);
+            } finally {
+                finalizeLockState();
             }
         } else if (doc.msFullscreenElement && doc.msExitFullscreen) { /* IE11 */
             try {
                 doc.msExitFullscreen();
             } catch (err) {
-                console.warn(`Exiting fullscreen failed: ${err.message}`);
+                handleExitError(err);
+            } finally {
+                finalizeLockState();
             }
+        } else {
+            finalizeLockState();
         }
     }
 

@@ -369,8 +369,8 @@
         </div>
 
         <div id="results-screen" class="screen">
-            <h2>Test Complete</h2>
-            <p>Thank you, <span id="results-name"></span>. Your results have been compiled.</p>
+            <h2>Assessment Completed</h2>
+            <p>Thank you, <span id="results-name"></span>. Please download your detailed PDF report using the button below.</p>
 
             <div id="results-summary">
                 <p id="results-score">Overall Score: 85%</p>
@@ -394,7 +394,7 @@
                 </section>
             </div>
 
-            <p>Click the button below to download your detailed PDF report. You will need to submit this file to your teacher.</p>
+            <p>Download your PDF report now to share the full assessment record with your teacher.</p>
 
             <button id="download-pdf-btn" class="btn">Download My Results (PDF)</button>
         </div>
@@ -12274,6 +12274,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const { question, userAnswer } = answer;
             if (!question) return;
 
+            const questionNumber = index + 1;
+            const userAnswerText = userAnswer ?? '';
+            const correctAnswer = Object.prototype.hasOwnProperty.call(question, 'answer')
+                ? question.answer
+                : null;
+
+            let passageQuestionRecord = null;
             if (question.passageId) {
                 const passageId = question.passageId;
                 if (!readingPassageUsage[passageId]) {
@@ -12284,18 +12291,22 @@ document.addEventListener("DOMContentLoaded", () => {
                     };
                 }
 
-                readingPassageUsage[passageId].questions.push({
-                    number: index + 1,
+                passageQuestionRecord = {
+                    number: questionNumber,
                     text: question.text,
-                    userAnswer: userAnswer ?? ''
-                });
+                    userAnswer: userAnswerText,
+                    correctAnswer,
+                    isCorrect: null
+                };
+
+                readingPassageUsage[passageId].questions.push(passageQuestionRecord);
             }
 
             const answeredRecord = {
-                number: index + 1,
+                number: questionNumber,
                 domain: question.domain || (question.type === 'reflection' ? 'Reflection' : 'General'),
                 text: question.text,
-                userAnswer: userAnswer ?? '',
+                userAnswer: userAnswerText,
                 correctAnswer: question.type === 'mcq' ? question.answer : null,
                 isCorrect: null,
                 passageId: question.passageId || null,
@@ -12309,6 +12320,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     text: question.text,
                     answer: userAnswer
                 });
+                if (passageQuestionRecord) {
+                    passageQuestionRecord.correctAnswer = null;
+                }
                 return;
             }
 
@@ -12321,9 +12335,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     domainScores[domain].correct++;
                     totalCorrect++;
                     answeredRecord.isCorrect = true;
+                    if (passageQuestionRecord) {
+                        passageQuestionRecord.isCorrect = true;
+                    }
                 } else {
                     incorrectResponses.push({ ...question, userAnswer });
                     answeredRecord.isCorrect = false;
+                    if (passageQuestionRecord) {
+                        passageQuestionRecord.isCorrect = false;
+                    }
                 }
             } else {
                 console.warn(`A question had an unknown domain: ${domain}`);
@@ -12506,7 +12526,28 @@ document.addEventListener("DOMContentLoaded", () => {
                     const list = document.createElement('ul');
                     passage.questions.forEach((q) => {
                         const item = document.createElement('li');
-                        item.textContent = `Question ${q.number}: ${q.text}`;
+
+                        const questionLine = document.createElement('div');
+                        questionLine.textContent = `Question ${q.number}: ${q.text}`;
+                        item.appendChild(questionLine);
+
+                        const answerValue = q.userAnswer && String(q.userAnswer).trim().length > 0
+                            ? String(q.userAnswer)
+                            : 'No response recorded.';
+                        const answerLine = document.createElement('div');
+                        answerLine.textContent = `Your Answer: ${answerValue}`;
+                        item.appendChild(answerLine);
+
+                        if (q.correctAnswer) {
+                            const resultLine = document.createElement('div');
+                            if (q.isCorrect === true) {
+                                resultLine.textContent = 'Result: Correct';
+                            } else {
+                                resultLine.textContent = `Correct Answer: ${q.correctAnswer}`;
+                            }
+                            item.appendChild(resultLine);
+                        }
+
                         list.appendChild(item);
                     });
                     wrapper.appendChild(list);
@@ -12755,6 +12796,24 @@ document.addEventListener("DOMContentLoaded", () => {
                             const questionLines = doc.splitTextToSize(`• Question ${q.number}: ${q.text}`, contentWidth - 4);
                             doc.text(questionLines, margin + 4, y);
                             y += questionLines.length * 4.5;
+
+                            const answerValue = q.userAnswer && String(q.userAnswer).trim().length > 0
+                                ? String(q.userAnswer)
+                                : 'No response recorded.';
+                            const answerLines = doc.splitTextToSize(`Your Answer: ${answerValue}`, contentWidth - 8);
+                            doc.text(answerLines, margin + 8, y);
+                            y += answerLines.length * 4.5;
+
+                            if (q.correctAnswer) {
+                                const resultLabel = q.isCorrect === true
+                                    ? 'Result: Correct'
+                                    : `Correct Answer: ${q.correctAnswer}`;
+                                const resultLines = doc.splitTextToSize(resultLabel, contentWidth - 8);
+                                doc.text(resultLines, margin + 8, y);
+                                y += resultLines.length * 4.5;
+                            }
+
+                            y += 4;
                         });
                     }
 

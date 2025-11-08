@@ -11595,6 +11595,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (ui?.isTransition) {
                     renderTransitionScreen(ui.transitionDomain || appState.testQuestions[appState.currentQuestionIndex]?.domain || 'Next Section');
                 } else {
+                    $passageContainer?.removeAttribute('data-passage-id');
+                    if ($passageContainer) {
+                        $passageContainer.innerHTML = '';
+                    }
+                    appState.lastPassageId = null;
                     renderQuestion(appState.currentQuestionIndex);
                 }
             } else if (activeScreen === 'integrity') {
@@ -11829,23 +11834,30 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // --- Handle Reading Passage ---
         if (question.passageId) {
-            const passageChanged = question.passageId !== appState.lastPassageId;
+            const renderedPassageId = $passageContainer.getAttribute('data-passage-id');
+            const passageChanged = question.passageId !== renderedPassageId;
             const passageMissingFromDom = $passageContainer.innerHTML.trim() === '';
 
             if (passageChanged || passageMissingFromDom) {
                 if (readingPassages[question.passageId]) {
                     $passageContainer.innerHTML = readingPassages[question.passageId];
                     $passageContainer.style.display = 'block';
+                    $passageContainer.setAttribute('data-passage-id', question.passageId);
                 } else {
                     console.warn(`Passage with ID '${question.passageId}' not found.`);
+                    $passageContainer.innerHTML = '';
                     $passageContainer.style.display = 'none';
+                    $passageContainer.removeAttribute('data-passage-id');
                 }
-                appState.lastPassageId = question.passageId;
             } else {
                 $passageContainer.style.display = 'block';
             }
+
+            appState.lastPassageId = readingPassages[question.passageId] ? question.passageId : null;
         } else {
+            $passageContainer.innerHTML = '';
             $passageContainer.style.display = 'none';
+            $passageContainer.removeAttribute('data-passage-id');
             appState.lastPassageId = null;
         }
 

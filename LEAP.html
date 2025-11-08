@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ELL Diagnostic System</title>
+    <title>LEAP Diagnostic System</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -12301,7 +12301,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // --- Finally: Add footers and Save ---
         addFooter();
         const safeName = studentName.replace(/ /g, '_').toLowerCase();
-        doc.save(`ell_diagnostic_${safeName}.pdf`);
+        doc.save(`leap_diagnostic_${safeName}.pdf`);
     }
 
    // =================================================================

@@ -241,6 +241,71 @@
             color: var(--brand-red);
         }
 
+        #results-details {
+            margin-top: 25px;
+        }
+
+        #results-details section {
+            margin-bottom: 25px;
+            background-color: #fbfbfb;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 20px;
+        }
+
+        #results-details h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: var(--brand-red);
+        }
+
+        .results-passage {
+            margin-bottom: 18px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #fff;
+            border: 1px solid #eee;
+        }
+
+        .results-passage pre {
+            margin: 0;
+            white-space: pre-wrap;
+            font-family: inherit;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .results-passage ul {
+            margin: 12px 0 0;
+            padding-left: 20px;
+        }
+
+        .results-passage li {
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .results-question {
+            border-bottom: 1px solid #eee;
+            padding: 12px 0;
+        }
+
+        .results-question:last-child {
+            border-bottom: none;
+        }
+
+        .results-question h4 {
+            margin: 0 0 6px;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .results-question p {
+            margin: 4px 0;
+            font-size: 15px;
+            white-space: pre-wrap;
+        }
+
     </style>
 </head>
 <body>
@@ -310,8 +375,22 @@
             <div id="results-summary">
                 <p id="results-score">Overall Score: 85%</p>
                 <p id="results-cefr">Estimated CEFR Level: C1</p>
+                <p id="results-security" style="color: var(--brand-red-dark); font-weight: 600;"></p>
+                <p id="results-integrity"></p>
             </div>
-            
+
+            <div id="results-details">
+                <section id="results-passages-section">
+                    <h3>Reading Passages Reviewed</h3>
+                    <div id="results-passages"></div>
+                </section>
+
+                <section id="results-answers-section">
+                    <h3>Answered Questions</h3>
+                    <div id="results-answers"></div>
+                </section>
+            </div>
+
             <p>Click the button below to download your detailed PDF report. You will need to submit this file to your teacher.</p>
 
             <button id="download-pdf-btn" class="btn">Download My Results (PDF)</button>
@@ -11248,6 +11327,28 @@ document.addEventListener("DOMContentLoaded", () => {
     // Disable right-click context menu
     document.addEventListener('contextmenu', event => event.preventDefault());
 
+    let fullscreenExitLocked = false;
+
+    const handleFullscreenExitKeydown = (event) => {
+        if (!fullscreenExitLocked) {
+            return;
+        }
+
+        const key = event.key || event.keyIdentifier || event.code;
+        const keyCode = event.keyCode;
+
+        const isEscape = key === 'Escape' || key === 'Esc' || keyCode === 27;
+        const isFullscreenToggle = key === 'F11' || keyCode === 122;
+
+        if (isEscape || isFullscreenToggle) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+        }
+    };
+
+    document.addEventListener('keydown', handleFullscreenExitKeydown, true);
+
     // Disable keyboard shortcuts for developer tools
     document.addEventListener('keydown', function(event) {
         if (
@@ -11470,6 +11571,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const $resultsName = $('#results-name');
     const $resultsScore = $('#results-score');
     const $resultsCEFR = $('#results-cefr');
+    const $resultsSecurity = $('#results-security');
+    const $resultsIntegrity = $('#results-integrity');
+    const $resultsPassagesSection = $('#results-passages-section');
+    const $resultsPassages = $('#results-passages');
+    const $resultsAnswersSection = $('#results-answers-section');
+    const $resultsAnswers = $('#results-answers');
     const $downloadPdfBtn = $('#download-pdf-btn');
 
     // Global application state
@@ -11479,8 +11586,10 @@ document.addEventListener("DOMContentLoaded", () => {
         currentQuestionIndex: 0,
         testQuestions: [],      // The 80 questions for this run
         userAnswers: [],        // Array to store user's responses
-        lastPassageId: null,
-        scores: null
+        scores: null,
+        integrityAgreedAt: null,
+        completedAt: null,
+        focusLossCount: 0
     };
 
     const STORAGE_KEY = 'ell-assessment-state-v1';
@@ -11585,7 +11694,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (appState.scores) {
                     $resultsScore.textContent = `Overall Score: ${appState.scores.overallPercentage.toFixed(1)}%`;
                     $resultsCEFR.textContent = `Estimated CEFR Level: ${appState.scores.cefrLevel}`;
+                    if (appState.scores.focusLossCount > 0) {
+                        $resultsSecurity.textContent = `Security Alert: Test window lost focus ${appState.scores.focusLossCount} time(s).`;
+                    } else {
+                        $resultsSecurity.textContent = '';
+                    }
                 }
+                renderResultsDetails();
                 $startScreen.classList.remove('active');
             } else if (activeScreen === 'test' && appState.testQuestions.length > 0) {
                 $testScreen.classList.add('active');
@@ -11595,6 +11710,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (ui?.isTransition) {
                     renderTransitionScreen(ui.transitionDomain || appState.testQuestions[appState.currentQuestionIndex]?.domain || 'Next Section');
                 } else {
+                    $passageContainer?.removeAttribute('data-passage-id');
+                    if ($passageContainer) {
+                        $passageContainer.innerHTML = '';
+                    }
                     renderQuestion(appState.currentQuestionIndex);
                 }
             } else if (activeScreen === 'integrity') {
@@ -11728,8 +11847,9 @@ document.addEventListener("DOMContentLoaded", () => {
             appState.studentName = name;
             appState.studentGrade = grade;
             appState.currentQuestionIndex = 0;
-            appState.lastPassageId = null;
             appState.scores = null;
+            appState.completedAt = null;
+            appState.focusLossCount = 0;
             appState.testQuestions = generateTestQuestions();
             
             // Check if test generation failed
@@ -11747,6 +11867,7 @@ document.addEventListener("DOMContentLoaded", () => {
             $progressText.textContent = `You are about to begin the test. (${totalQuestions} questions)`;
             $passageContainer.innerHTML = '';
             $passageContainer.style.display = 'none';
+            $passageContainer.removeAttribute('data-passage-id');
 
             // --- Update UI ---
             $integrityScreen?.classList.remove('active');
@@ -11828,19 +11949,30 @@ document.addEventListener("DOMContentLoaded", () => {
         $progressText.textContent = `Question ${index + 1} of ${totalQuestions}`;
         
         // --- Handle Reading Passage ---
-        if (question.passageId && question.passageId !== appState.lastPassageId) {
-            // Check if passage exists
-            if (readingPassages[question.passageId]) {
-                $passageContainer.innerHTML = readingPassages[question.passageId];
-                $passageContainer.style.display = 'block';
+        if (question.passageId) {
+            const renderedPassageId = $passageContainer.getAttribute('data-passage-id');
+            const passageChanged = question.passageId !== renderedPassageId;
+            const passageMissingFromDom = $passageContainer.innerHTML.trim() === '';
+
+            if (passageChanged || passageMissingFromDom) {
+                if (readingPassages[question.passageId]) {
+                    $passageContainer.innerHTML = readingPassages[question.passageId];
+                    $passageContainer.style.display = 'block';
+                    $passageContainer.setAttribute('data-passage-id', question.passageId);
+                } else {
+                    console.warn(`Passage with ID '${question.passageId}' not found.`);
+                    $passageContainer.innerHTML = '';
+                    $passageContainer.style.display = 'none';
+                    $passageContainer.removeAttribute('data-passage-id');
+                }
             } else {
-                console.warn(`Passage with ID '${question.passageId}' not found.`);
-                $passageContainer.style.display = 'none';
+                $passageContainer.style.display = 'block';
             }
-            appState.lastPassageId = question.passageId;
-        } else if (!question.passageId) {
+
+        } else {
+            $passageContainer.innerHTML = '';
             $passageContainer.style.display = 'none';
-            appState.lastPassageId = null;
+            $passageContainer.removeAttribute('data-passage-id');
         }
 
         // --- Render Question Text ---
@@ -11908,6 +12040,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Hide question elements
         $passageContainer.style.display = 'none';
+        $passageContainer.innerHTML = '';
+        $passageContainer.removeAttribute('data-passage-id');
         $testValidation.style.display = 'none';
 
         // Show transition info
@@ -12024,11 +12158,22 @@ document.addEventListener("DOMContentLoaded", () => {
      */
     function showResults() {
         appState.scores = calculateScores();
-        const { overallPercentage, cefrLevel } = appState.scores;
+        if (!appState.completedAt) {
+            appState.completedAt = new Date().toISOString();
+        }
+        const { overallPercentage, cefrLevel, focusLossCount } = appState.scores;
 
         $resultsName.textContent = appState.studentName;
         $resultsScore.textContent = `Overall Score: ${overallPercentage.toFixed(1)}%`;
         $resultsCEFR.textContent = `Estimated CEFR Level: ${cefrLevel}`;
+
+        if (focusLossCount > 0) {
+            $resultsSecurity.textContent = `Security Alert: Test window lost focus ${focusLossCount} time(s).`;
+        } else {
+            $resultsSecurity.textContent = '';
+        }
+
+        renderResultsDetails();
 
         $testScreen.classList.remove('active');
         $resultsScreen.classList.add('active');
@@ -12055,17 +12200,51 @@ document.addEventListener("DOMContentLoaded", () => {
             domainScores[domain] = { correct: 0, total: 0 };
         });
 
-        appState.userAnswers.forEach(answer => {
-            if (!answer) return; 
-            
+        const readingPassageUsage = {};
+        const answeredQuestions = [];
+
+        appState.userAnswers.forEach((answer, index) => {
+            if (!answer) return;
+
             const { question, userAnswer } = answer;
+            if (!question) return;
+
+            if (question.passageId) {
+                const passageId = question.passageId;
+                if (!readingPassageUsage[passageId]) {
+                    readingPassageUsage[passageId] = {
+                        passageId,
+                        content: readingPassages[passageId] || '',
+                        questions: []
+                    };
+                }
+
+                readingPassageUsage[passageId].questions.push({
+                    number: index + 1,
+                    text: question.text,
+                    userAnswer: userAnswer ?? ''
+                });
+            }
+
+            const answeredRecord = {
+                number: index + 1,
+                domain: question.domain || (question.type === 'reflection' ? 'Reflection' : 'General'),
+                text: question.text,
+                userAnswer: userAnswer ?? '',
+                correctAnswer: question.type === 'mcq' ? question.answer : null,
+                isCorrect: null,
+                passageId: question.passageId || null,
+                questionType: question.type
+            };
+
+            answeredQuestions.push(answeredRecord);
 
             if (question.type === 'reflection') {
                 reflectionResponses.push({
                     text: question.text,
                     answer: userAnswer
                 });
-                return; 
+                return;
             }
 
             const domain = question.domain;
@@ -12076,13 +12255,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (userAnswer === question.answer) {
                     domainScores[domain].correct++;
                     totalCorrect++;
+                    answeredRecord.isCorrect = true;
                 } else {
                     incorrectResponses.push({ ...question, userAnswer });
+                    answeredRecord.isCorrect = false;
                 }
             } else {
                 console.warn(`A question had an unknown domain: ${domain}`);
             }
         });
+
+        const readingPassagesUsed = Object.values(readingPassageUsage);
 
         const overallPercentage = (totalScored > 0) ? (totalCorrect / totalScored) * 100 : 0;
         const cefrLevel = getCEFRLevel(overallPercentage);
@@ -12094,7 +12277,10 @@ document.addEventListener("DOMContentLoaded", () => {
             cefrLevel,
             domainScores,
             incorrectResponses,
-            reflectionResponses
+            reflectionResponses,
+            readingPassagesUsed,
+            answeredQuestions,
+            focusLossCount: appState.focusLossCount
         };
     }
 
@@ -12110,6 +12296,183 @@ document.addEventListener("DOMContentLoaded", () => {
         return "C2";
     }
 
+    function formatTimestamp(isoString) {
+        if (!isoString) return null;
+        const date = new Date(isoString);
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return date.toLocaleString();
+    }
+
+    function goFullscreen() {
+        const elem = document.documentElement;
+        fullscreenExitLocked = true;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(err => {
+                fullscreenExitLocked = false;
+                console.warn(`Fullscreen mode failed: ${err.message}`);
+            });
+        } else if (elem.webkitRequestFullscreen) { /* Safari */
+            try {
+                elem.webkitRequestFullscreen();
+            } catch (err) {
+                fullscreenExitLocked = false;
+                console.warn(`Fullscreen mode failed: ${err.message}`);
+            }
+        } else if (elem.msRequestFullscreen) { /* IE11 */
+            try {
+                elem.msRequestFullscreen();
+            } catch (err) {
+                fullscreenExitLocked = false;
+                console.warn(`Fullscreen mode failed: ${err.message}`);
+            }
+        }
+    }
+
+    function exitFullscreen() {
+        const doc = document;
+        fullscreenExitLocked = false;
+        if (doc.fullscreenElement && doc.exitFullscreen) {
+            doc.exitFullscreen().catch(err => {
+                console.warn(`Exiting fullscreen failed: ${err.message}`);
+            });
+        } else if (doc.webkitFullscreenElement && doc.webkitExitFullscreen) { /* Safari */
+            try {
+                doc.webkitExitFullscreen();
+            } catch (err) {
+                console.warn(`Exiting fullscreen failed: ${err.message}`);
+            }
+        } else if (doc.msFullscreenElement && doc.msExitFullscreen) { /* IE11 */
+            try {
+                doc.msExitFullscreen();
+            } catch (err) {
+                console.warn(`Exiting fullscreen failed: ${err.message}`);
+            }
+        }
+    }
+
+    function renderResultsDetails() {
+        if ($resultsIntegrity) {
+            const integrityTimestamp = formatTimestamp(appState.integrityAgreedAt);
+            $resultsIntegrity.textContent = integrityTimestamp
+                ? `Academic Integrity Affirmation: Verified on ${integrityTimestamp}`
+                : 'Academic Integrity Affirmation: Not yet verified';
+        }
+
+        if (!$resultsPassages || !$resultsAnswers) {
+            return;
+        }
+
+        const scores = appState.scores;
+        if (!scores) {
+            $resultsPassages.innerHTML = '';
+            $resultsAnswers.innerHTML = '';
+            if ($resultsPassagesSection) {
+                $resultsPassagesSection.style.display = 'none';
+            }
+            if ($resultsAnswersSection) {
+                $resultsAnswersSection.style.display = 'none';
+            }
+            return;
+        }
+
+        const { readingPassagesUsed = [], answeredQuestions = [] } = scores;
+
+        if ($resultsPassagesSection) {
+            $resultsPassagesSection.style.display = 'block';
+        }
+        $resultsPassages.innerHTML = '';
+
+        if (readingPassagesUsed.length === 0) {
+            const message = document.createElement('p');
+            message.textContent = 'No reading passages were included in this assessment.';
+            $resultsPassages.appendChild(message);
+        } else {
+            readingPassagesUsed.forEach((passage, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'results-passage';
+
+                const heading = document.createElement('h4');
+                const label = `Passage ${index + 1}${passage.passageId ? ` (ID: ${passage.passageId})` : ''}`;
+                heading.textContent = label;
+                wrapper.appendChild(heading);
+
+                const pre = document.createElement('pre');
+                const content = typeof passage.content === 'string' && passage.content.trim().length > 0
+                    ? passage.content
+                    : 'Passage text unavailable.';
+                pre.textContent = content;
+                wrapper.appendChild(pre);
+
+                if (Array.isArray(passage.questions) && passage.questions.length > 0) {
+                    const questionHeading = document.createElement('p');
+                    questionHeading.style.fontWeight = '600';
+                    questionHeading.style.marginTop = '12px';
+                    questionHeading.textContent = 'Questions answered with this passage:';
+                    wrapper.appendChild(questionHeading);
+
+                    const list = document.createElement('ul');
+                    passage.questions.forEach((q) => {
+                        const item = document.createElement('li');
+                        item.textContent = `Question ${q.number}: ${q.text}`;
+                        list.appendChild(item);
+                    });
+                    wrapper.appendChild(list);
+                }
+
+                $resultsPassages.appendChild(wrapper);
+            });
+        }
+
+        if ($resultsAnswersSection) {
+            $resultsAnswersSection.style.display = 'block';
+        }
+        $resultsAnswers.innerHTML = '';
+
+        if (answeredQuestions.length === 0) {
+            const message = document.createElement('p');
+            message.textContent = 'No responses were recorded during this assessment.';
+            $resultsAnswers.appendChild(message);
+            return;
+        }
+
+        answeredQuestions.forEach((entry) => {
+            const questionContainer = document.createElement('div');
+            questionContainer.className = 'results-question';
+
+            const header = document.createElement('h4');
+            const domainLabel = entry.domain ? ` — ${entry.domain}` : '';
+            header.textContent = `Question ${entry.number}${domainLabel}`;
+            questionContainer.appendChild(header);
+
+            const textPara = document.createElement('p');
+            textPara.textContent = entry.text;
+            questionContainer.appendChild(textPara);
+
+            const answerPara = document.createElement('p');
+            const answerText = entry.userAnswer && String(entry.userAnswer).trim().length > 0
+                ? String(entry.userAnswer)
+                : 'No response recorded.';
+            answerPara.textContent = `Your Answer: ${answerText}`;
+            questionContainer.appendChild(answerPara);
+
+            if (entry.correctAnswer) {
+                const resultPara = document.createElement('p');
+                if (entry.isCorrect === true) {
+                    resultPara.textContent = 'Result: Correct';
+                } else if (entry.isCorrect === false) {
+                    resultPara.textContent = `Correct Answer: ${entry.correctAnswer}`;
+                } else {
+                    resultPara.textContent = `Correct Answer: ${entry.correctAnswer}`;
+                }
+                questionContainer.appendChild(resultPara);
+            }
+
+            $resultsAnswers.appendChild(questionContainer);
+        });
+    }
+
 
     // =================================================================
     // == PDF GENERATION (jsPDF)
@@ -12123,167 +12486,305 @@ document.addEventListener("DOMContentLoaded", () => {
         const doc = new jsPDF();
         const { scores, studentName, studentGrade } = appState;
 
-        const margin = 15;
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const contentWidth = pageWidth - margin * 2;
-        let y = 20; 
-        const brandRed = '#ff0000';
-
-        const checkPageBreak = (currentY) => {
-            if (currentY > pageHeight - 30) { 
-                doc.addPage();
-                return 20; 
-            }
-            return currentY;
-        };
-        
-        const addFooter = () => {
-            const pageCount = doc.internal.getNumberOfPages();
-            const timestamp = new Date().toLocaleString();
-            
-            for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(9);
-                doc.setTextColor(100);
-                
-                const footerY = pageHeight - 10;
-                doc.text(`Generated: ${timestamp}`, margin, footerY);
-                doc.text(
-                    "Generated by MindScape Analytics", 
-                    pageWidth - margin, 
-                    footerY, 
-                    { align: 'right' }
-                );
-            }
-        };
-
-        // --- 1. Header ---
-        doc.setFontSize(18);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(brandRed);
-        doc.text("L.E.A.P. - Language Evaluation & Academic Placement", pageWidth / 2, y, { align: 'center' });
-        y += 10;
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(brandRed);
-        doc.line(margin, y, pageWidth - margin, y);
-        y += 10;
-
-        // --- 2. Student Info ---
-        doc.setFontSize(12);
-        doc.setFont(undefined, 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(`Student: ${studentName}`, margin, y);
-        doc.text(`Grade: ${studentGrade}`, margin + 70, y);
-        doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, y, { align: 'right' });
-        y += 15;
-
-        // --- 3. Overall Score ---
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        doc.text(`Overall Score: ${scores.overallPercentage.toFixed(1)}%`, margin, y);
-        doc.text(`Derived CEFR Level: ${scores.cefrLevel}`, pageWidth - margin, y, { align: 'right' });
-        y += 10;
-
-        // --- 4. Domain Scores ---
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text("Domain Scores", margin, y);
-        y += 7;
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'normal');
-
-        Object.keys(scores.domainScores).forEach(domain => {
-            y = checkPageBreak(y);
-            const ds = scores.domainScores[domain];
-            const percent = (ds.total > 0) ? (ds.correct / ds.total) * 100 : 0;
-            const text = `${domain}: ${percent.toFixed(0)}% (${ds.correct}/${ds.total})`;
-            doc.text(text, margin + 5, y);
-            y += 7;
-        });
-
-        // --- 5. Incorrect Responses ---
-        y += 5;
-        y = checkPageBreak(y);
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text("Incorrect Responses", margin, y);
-        y += 7;
-        
-        scores.incorrectResponses.forEach(q => {
-            y = checkPageBreak(y);
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text(`Domain: ${q.domain} (CEFR: ${q.level})`, margin, y);
-            y += 5;
-            
-            doc.setFont(undefined, 'normal');
-            const qText = doc.splitTextToSize(`Q: ${q.text}`, contentWidth);
-            doc.text(qText, margin, y);
-            y += qText.length * 4.5; 
-
-            const aText = doc.splitTextToSize(`Your Answer: ${q.userAnswer}`, contentWidth);
-            doc.setTextColor(brandRed);
-            doc.text(aText, margin, y);
-            y += aText.length * 4.5;
-
-            const cText = doc.splitTextToSize(`Correct Answer: ${q.answer}`, contentWidth);
-            doc.setTextColor(0, 100, 0); // Green
-            doc.text(cText, margin, y);
-            y += cText.length * 4.5;
-
-            doc.setTextColor(0, 0, 0);
-            y += 5; 
-            doc.setLineWidth(0.1);
-            doc.setDrawColor(200);
-            doc.line(margin, y, pageWidth - margin, y);
-            y += 5;
-        });
-        
-        if (scores.incorrectResponses.length === 0) {
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'italic');
-            doc.text("No incorrect answers. Excellent work!", margin, y);
-            y += 10;
+        if (!scores) {
+            alert('Assessment results are not available yet. Complete the test before downloading the report.');
+            return;
         }
-        
-        // --- 6. Areas for Improvement (Placeholder) ---
-        y = checkPageBreak(y);
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text("Areas for Improvement", margin, y);
-        y += 7;
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'normal');
-        doc.text("Based on your responses, review the concepts related to the questions listed above.", margin, y);
-        y += 10;
 
-        // --- 7. Reflection Responses ---
-        y = checkPageBreak(y);
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text("Reflection Responses", margin, y);
-        y += 7;
-        
-        scores.reflectionResponses.forEach(r => {
-            y = checkPageBreak(y);
-            doc.setFontSize(10);
+        try {
+            const margin = 15;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const contentWidth = pageWidth - margin * 2;
+            let y = 20;
+            const brandRed = '#ff0000';
+            const completionTimestamp = formatTimestamp(appState.completedAt) || new Date().toLocaleString();
+            const integrityTimestamp = formatTimestamp(appState.integrityAgreedAt);
+            const integrityText = integrityTimestamp
+                ? `Academic Integrity Affirmation: Verified on ${integrityTimestamp}`
+                : 'Academic Integrity Affirmation: Not yet verified';
+
+            const checkPageBreak = (currentY) => {
+                if (currentY > pageHeight - 30) {
+                    doc.addPage();
+                    return 20;
+                }
+                return currentY;
+            };
+
+            const addFooter = () => {
+                const pageCount = doc.internal.getNumberOfPages();
+                const timestamp = new Date().toLocaleString();
+
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(9);
+                    doc.setTextColor(100);
+
+                    const footerY = pageHeight - 10;
+                    doc.text(`Generated: ${timestamp}`, margin, footerY);
+                    doc.text(
+                        "Generated by MindScape Analytics",
+                        pageWidth - margin,
+                        footerY,
+                        { align: 'right' }
+                    );
+                }
+            };
+
+            // --- 1. Header ---
+            doc.setFontSize(18);
             doc.setFont(undefined, 'bold');
-            const qText = doc.splitTextToSize(`Q: ${r.text}`, contentWidth);
-            doc.text(qText, margin, y);
-            y += qText.length * 4.5;
+            doc.setTextColor(brandRed);
+            doc.text("L.E.A.P. - Language Evaluation & Academic Placement", pageWidth / 2, y, { align: 'center' });
+            y += 10;
+            doc.setLineWidth(0.5);
+            doc.setDrawColor(brandRed);
+            doc.line(margin, y, pageWidth - margin, y);
+            y += 10;
 
+            // --- 2. Student Info ---
+            doc.setFontSize(12);
             doc.setFont(undefined, 'normal');
-            const aText = doc.splitTextToSize(`A: ${r.answer}`, contentWidth);
-            doc.text(aText, margin, y);
-            y += aText.length * 4.5 + 5;
-        });
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Student: ${studentName}`, margin, y);
+            doc.text(`Grade: ${studentGrade}`, margin + 70, y);
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, y, { align: 'right' });
+            y += 8;
 
-        // --- Finally: Add footers and Save ---
-        addFooter();
-        const safeName = studentName.replace(/ /g, '_').toLowerCase();
-        doc.save(`ell_diagnostic_${safeName}.pdf`);
+            doc.setFontSize(11);
+            doc.text(`Assessment Completed: ${completionTimestamp}`, margin, y);
+            y += 6;
+            doc.text(integrityText, margin, y);
+            y += 12;
+
+            // --- 3. Overall Score ---
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text(`Overall Score: ${scores.overallPercentage.toFixed(1)}%`, margin, y);
+            doc.text(`Derived CEFR Level: ${scores.cefrLevel}`, pageWidth - margin, y, { align: 'right' });
+            y += 10;
+
+            // --- Add Security Alert to PDF ---
+            if (scores.focusLossCount > 0) {
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(brandRed);
+                doc.text(`SECURITY ALERT: Test window lost focus ${scores.focusLossCount} time(s).`, margin, y);
+                y += 10;
+                doc.setTextColor(0, 0, 0);
+            }
+
+            // --- 4. Domain Scores ---
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text("Domain Scores", margin, y);
+            y += 7;
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+
+            Object.keys(scores.domainScores).forEach(domain => {
+                y = checkPageBreak(y);
+                const ds = scores.domainScores[domain];
+                const percent = (ds.total > 0) ? (ds.correct / ds.total) * 100 : 0;
+                const text = `${domain}: ${percent.toFixed(0)}% (${ds.correct}/${ds.total})`;
+                doc.text(text, margin + 5, y);
+                y += 7;
+            });
+
+            // --- 5. Reading Passages Reviewed ---
+            y += 5;
+            y = checkPageBreak(y);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('Reading Passages Reviewed', margin, y);
+            y += 7;
+
+            const readingPassagesUsed = scores.readingPassagesUsed || [];
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+
+            if (readingPassagesUsed.length === 0) {
+                doc.setFont(undefined, 'italic');
+                doc.setFontSize(11);
+                doc.text('No reading passages were included in this assessment.', margin, y);
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(10);
+                y += 10;
+            } else {
+                readingPassagesUsed.forEach((passage, index) => {
+                    y = checkPageBreak(y);
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    const passageLabel = `Passage ${index + 1}${passage.passageId ? ` (ID: ${passage.passageId})` : ''}`;
+                    doc.text(passageLabel, margin, y);
+                    y += 6;
+
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'normal');
+                    const passageContent = typeof passage.content === 'string' && passage.content.trim().length > 0
+                        ? passage.content
+                        : 'Passage text unavailable.';
+                    const passageLines = doc.splitTextToSize(passageContent, contentWidth);
+                    doc.text(passageLines, margin, y);
+                    y += passageLines.length * 4.5;
+
+                    if (Array.isArray(passage.questions) && passage.questions.length > 0) {
+                        y += 2;
+                        doc.setFont(undefined, 'bold');
+                        doc.text('Questions answered with this passage:', margin, y);
+                        y += 5;
+                        doc.setFont(undefined, 'normal');
+                        passage.questions.forEach((q) => {
+                            y = checkPageBreak(y);
+                            const questionLines = doc.splitTextToSize(`• Question ${q.number}: ${q.text}`, contentWidth - 4);
+                            doc.text(questionLines, margin + 4, y);
+                            y += questionLines.length * 4.5;
+                        });
+                    }
+
+                    y += 6;
+                });
+            }
+
+            // --- 6. Answered Questions ---
+            y = checkPageBreak(y);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('Answered Questions', margin, y);
+            y += 7;
+
+            const answeredQuestions = scores.answeredQuestions || [];
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+
+            if (answeredQuestions.length === 0) {
+                doc.setFont(undefined, 'italic');
+                doc.setFontSize(11);
+                doc.text('No responses were recorded during this assessment.', margin, y);
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(10);
+                y += 10;
+            } else {
+                answeredQuestions.forEach((entry) => {
+                    y = checkPageBreak(y);
+                    doc.setFontSize(11);
+                    doc.setFont(undefined, 'bold');
+                    const domainLabel = entry.domain ? ` — ${entry.domain}` : '';
+                    doc.text(`Question ${entry.number}${domainLabel}`, margin, y);
+                    y += 5;
+
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'normal');
+                    const questionLines = doc.splitTextToSize(entry.text, contentWidth);
+                    doc.text(questionLines, margin, y);
+                    y += questionLines.length * 4.5;
+
+                    const answerValue = entry.userAnswer && String(entry.userAnswer).trim().length > 0
+                        ? String(entry.userAnswer)
+                        : 'No response recorded.';
+                    const answerLines = doc.splitTextToSize(`Your Answer: ${answerValue}`, contentWidth);
+                    doc.text(answerLines, margin, y);
+                    y += answerLines.length * 4.5;
+
+                    if (entry.correctAnswer) {
+                        const resultLabel = entry.isCorrect === true
+                            ? 'Result: Correct'
+                            : `Correct Answer: ${entry.correctAnswer}`;
+                        const resultLines = doc.splitTextToSize(resultLabel, contentWidth);
+                        doc.text(resultLines, margin, y);
+                        y += resultLines.length * 4.5;
+                    }
+
+                    y += 6;
+                });
+            }
+
+            // --- 7. Incorrect Responses ---
+            y += 5;
+            y = checkPageBreak(y);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text("Incorrect Responses", margin, y);
+            y += 7;
+
+            scores.incorrectResponses.forEach(q => {
+                y = checkPageBreak(y);
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text(`Domain: ${q.domain} (CEFR: ${q.level})`, margin, y);
+                y += 5;
+
+                doc.setFont(undefined, 'normal');
+                const qText = doc.splitTextToSize(`Q: ${q.text}`, contentWidth);
+                doc.text(qText, margin, y);
+                y += qText.length * 4.5;
+
+                const aText = doc.splitTextToSize(`Your Answer: ${q.userAnswer}`, contentWidth);
+                doc.setTextColor(brandRed);
+                doc.text(aText, margin, y);
+                y += aText.length * 4.5;
+
+                const cText = doc.splitTextToSize(`Correct Answer: ${q.answer}`, contentWidth);
+                doc.setTextColor(0, 100, 0); // Green
+                doc.text(cText, margin, y);
+                y += cText.length * 4.5;
+
+                doc.setTextColor(0, 0, 0);
+                y += 5;
+                doc.setLineWidth(0.1);
+                doc.setDrawColor(200);
+                doc.line(margin, y, pageWidth - margin, y);
+                y += 5;
+            });
+
+            if (scores.incorrectResponses.length === 0) {
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'italic');
+                doc.text("No incorrect answers. Excellent work!", margin, y);
+                y += 10;
+            }
+
+            // --- 8. Areas for Improvement (Placeholder) ---
+            y = checkPageBreak(y);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text("Areas for Improvement", margin, y);
+            y += 7;
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            doc.text("Based on your responses, review the concepts related to the questions listed above.", margin, y);
+            y += 10;
+
+            // --- 9. Reflection Responses ---
+            y = checkPageBreak(y);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text("Reflection Responses", margin, y);
+            y += 7;
+
+            scores.reflectionResponses.forEach(r => {
+                y = checkPageBreak(y);
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                const qText = doc.splitTextToSize(`Q: ${r.text}`, contentWidth);
+                doc.text(qText, margin, y);
+                y += qText.length * 4.5;
+
+                doc.setFont(undefined, 'normal');
+                const aText = doc.splitTextToSize(`A: ${r.answer}`, contentWidth);
+                doc.text(aText, margin, y);
+                y += aText.length * 4.5 + 5;
+            });
+
+            // --- Finally: Add footers and Save ---
+            addFooter();
+            const safeName = studentName.replace(/ /g, '_').toLowerCase();
+            doc.save(`ell_diagnostic_${safeName}.pdf`);
+        } finally {
+            exitFullscreen();
+        }
     }
 
    // =================================================================
@@ -12292,8 +12793,11 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if ($agreeBtn) {
         $agreeBtn.addEventListener('click', () => {
+            appState.integrityAgreedAt = new Date().toISOString();
+            goFullscreen();
             $integrityScreen?.classList.remove('active');
             $startScreen?.classList.add('active');
+            persistState({ activeScreen: 'start', isTransition: false });
         });
     } else {
         console.error("Agree Button not found!");
@@ -12319,6 +12823,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
         console.error("Download PDF Button not found!");
     }
+
+    // --- Add a listener to detect when the user leaves the tab ---
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && $testScreen.classList.contains('active')) {
+            appState.focusLossCount++;
+            console.warn(`User lost focus. Count: ${appState.focusLossCount}`);
+        }
+    });
 
     restoreStateIfAvailable();
 

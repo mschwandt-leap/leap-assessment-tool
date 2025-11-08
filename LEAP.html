@@ -220,27 +220,6 @@
             75% { transform: translateX(-5px); }
         }
 
-        /* --- Results Screen --- */
-        #results-summary {
-            background-color: #f9f9f9;
-            border: 1px solid #eee;
-            padding: 20px;
-            border-radius: 5px;
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        #results-summary p {
-            font-size: 18px;
-            margin: 5px 0;
-        }
-
-        #results-summary #results-score {
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--brand-red);
-        }
-
         #results-details {
             margin-top: 25px;
         }
@@ -370,17 +349,7 @@
 
         <div id="results-screen" class="screen">
             <h2>Assessment Completed</h2>
-            <p>Thank you, <span id="results-name"></span>. Please download your detailed PDF report using the button below.</p>
-
-            <div id="results-summary">
-                <p id="results-score">Overall Score: 85%</p>
-                <p id="results-cefr">Estimated CEFR Level: C1</p>
-                <p id="results-security" style="color: var(--brand-red-dark); font-weight: 600;"></p>
-                <p id="results-security-copy" style="color: var(--brand-red-dark); font-weight: 600;"></p>
-                <p id="results-security-paste" style="color: var(--brand-red-dark); font-weight: 600;"></p>
-                <p id="results-security-resize" style="color: var(--brand-red-dark); font-weight: 600;"></p>
-                <p id="results-integrity"></p>
-            </div>
+            <p>Thank you, <span id="results-name"></span>. Your detailed score, security summary, and integrity verification are included in the downloadable PDF report.</p>
 
             <div id="results-details">
                 <section id="results-passages-section">
@@ -11583,13 +11552,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const $testValidation = $('#test-validation-message');
 
     const $resultsName = $('#results-name');
-    const $resultsScore = $('#results-score');
-    const $resultsCEFR = $('#results-cefr');
-    const $resultsSecurity = $('#results-security');
-    const $resultsSecurityCopy = $('#results-security-copy');
-    const $resultsSecurityPaste = $('#results-security-paste');
-    const $resultsSecurityResize = $('#results-security-resize');
-    const $resultsIntegrity = $('#results-integrity');
     const $resultsPassagesSection = $('#results-passages-section');
     const $resultsPassages = $('#results-passages');
     const $resultsAnswersSection = $('#results-answers-section');
@@ -11718,35 +11680,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (activeScreen === 'results') {
                 $resultsScreen.classList.add('active');
                 $resultsName.textContent = appState.studentName || '';
-                if (appState.scores) {
-                    $resultsScore.textContent = `Overall Score: ${appState.scores.overallPercentage.toFixed(1)}%`;
-                    $resultsCEFR.textContent = `Estimated CEFR Level: ${appState.scores.cefrLevel}`;
-                    const {
-                        focusLossCount = 0,
-                        copyCount = 0,
-                        pasteCount = 0,
-                        resizeCount = 0
-                    } = appState.scores;
-
-                    $resultsSecurity.textContent = focusLossCount > 0
-                        ? `Security Alert: Test window lost focus ${focusLossCount} time(s).`
-                        : '';
-                    $resultsSecurityCopy.textContent = copyCount > 0
-                        ? `Security Alert: Content was copied ${copyCount} time(s).`
-                        : '';
-                    $resultsSecurityPaste.textContent = pasteCount > 0
-                        ? `Security Alert: Content was pasted ${pasteCount} time(s).`
-                        : '';
-                    $resultsSecurityResize.textContent = resizeCount > 0
-                        ? `Security Alert: Window was resized ${resizeCount} time(s).`
-                        : '';
-                }
-                if (!appState.scores) {
-                    $resultsSecurity.textContent = '';
-                    $resultsSecurityCopy.textContent = '';
-                    $resultsSecurityPaste.textContent = '';
-                    $resultsSecurityResize.textContent = '';
-                }
                 renderResultsDetails();
                 $startScreen.classList.remove('active');
             } else if (activeScreen === 'test' && appState.testQuestions.length > 0) {
@@ -12212,31 +12145,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!appState.completedAt) {
             appState.completedAt = new Date().toISOString();
         }
-        const {
-            overallPercentage,
-            cefrLevel,
-            focusLossCount = 0,
-            copyCount = 0,
-            pasteCount = 0,
-            resizeCount = 0
-        } = appState.scores;
-
         $resultsName.textContent = appState.studentName;
-        $resultsScore.textContent = `Overall Score: ${overallPercentage.toFixed(1)}%`;
-        $resultsCEFR.textContent = `Estimated CEFR Level: ${cefrLevel}`;
-
-        $resultsSecurity.textContent = focusLossCount > 0
-            ? `Security Alert: Test window lost focus ${focusLossCount} time(s).`
-            : '';
-        $resultsSecurityCopy.textContent = copyCount > 0
-            ? `Security Alert: Content was copied ${copyCount} time(s).`
-            : '';
-        $resultsSecurityPaste.textContent = pasteCount > 0
-            ? `Security Alert: Content was pasted ${pasteCount} time(s).`
-            : '';
-        $resultsSecurityResize.textContent = resizeCount > 0
-            ? `Security Alert: Window was resized ${resizeCount} time(s).`
-            : '';
 
         renderResultsDetails();
 
@@ -12464,13 +12373,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderResultsDetails() {
-        if ($resultsIntegrity) {
-            const integrityTimestamp = formatTimestamp(appState.integrityAgreedAt);
-            $resultsIntegrity.textContent = integrityTimestamp
-                ? `Academic Integrity Affirmation: Verified on ${integrityTimestamp}`
-                : 'Academic Integrity Affirmation: Not yet verified';
-        }
-
         if (!$resultsPassages || !$resultsAnswers) {
             return;
         }

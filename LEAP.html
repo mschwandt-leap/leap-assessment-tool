@@ -376,6 +376,9 @@
                 <p id="results-score">Overall Score: 85%</p>
                 <p id="results-cefr">Estimated CEFR Level: C1</p>
                 <p id="results-security" style="color: var(--brand-red-dark); font-weight: 600;"></p>
+                <p id="results-security-copy" style="color: var(--brand-red-dark); font-weight: 600;"></p>
+                <p id="results-security-paste" style="color: var(--brand-red-dark); font-weight: 600;"></p>
+                <p id="results-security-resize" style="color: var(--brand-red-dark); font-weight: 600;"></p>
                 <p id="results-integrity"></p>
             </div>
 
@@ -11596,6 +11599,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const $resultsScore = $('#results-score');
     const $resultsCEFR = $('#results-cefr');
     const $resultsSecurity = $('#results-security');
+    const $resultsSecurityCopy = $('#results-security-copy');
+    const $resultsSecurityPaste = $('#results-security-paste');
+    const $resultsSecurityResize = $('#results-security-resize');
     const $resultsIntegrity = $('#results-integrity');
     const $resultsPassagesSection = $('#results-passages-section');
     const $resultsPassages = $('#results-passages');
@@ -11613,7 +11619,11 @@ document.addEventListener("DOMContentLoaded", () => {
         scores: null,
         integrityAgreedAt: null,
         completedAt: null,
-        focusLossCount: 0
+        focusLossCount: 0,
+        copyCount: 0,
+        pasteCount: 0,
+        resizeCount: 0,
+        isResizing: false
     };
 
     const STORAGE_KEY = 'ell-assessment-state-v1';
@@ -11706,6 +11716,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 userAnswers: savedState.userAnswers || []
             };
 
+            appState.focusLossCount = Number.isFinite(appState.focusLossCount) ? appState.focusLossCount : 0;
+            appState.copyCount = Number.isFinite(appState.copyCount) ? appState.copyCount : 0;
+            appState.pasteCount = Number.isFinite(appState.pasteCount) ? appState.pasteCount : 0;
+            appState.resizeCount = Number.isFinite(appState.resizeCount) ? appState.resizeCount : 0;
+            appState.isResizing = false;
+
             $startScreen.classList.remove('active');
             $testScreen.classList.remove('active');
             $resultsScreen.classList.remove('active');
@@ -11718,11 +11734,31 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (appState.scores) {
                     $resultsScore.textContent = `Overall Score: ${appState.scores.overallPercentage.toFixed(1)}%`;
                     $resultsCEFR.textContent = `Estimated CEFR Level: ${appState.scores.cefrLevel}`;
-                    if (appState.scores.focusLossCount > 0) {
-                        $resultsSecurity.textContent = `Security Alert: Test window lost focus ${appState.scores.focusLossCount} time(s).`;
-                    } else {
-                        $resultsSecurity.textContent = '';
-                    }
+                    const {
+                        focusLossCount = 0,
+                        copyCount = 0,
+                        pasteCount = 0,
+                        resizeCount = 0
+                    } = appState.scores;
+
+                    $resultsSecurity.textContent = focusLossCount > 0
+                        ? `Security Alert: Test window lost focus ${focusLossCount} time(s).`
+                        : '';
+                    $resultsSecurityCopy.textContent = copyCount > 0
+                        ? `Security Alert: Content was copied ${copyCount} time(s).`
+                        : '';
+                    $resultsSecurityPaste.textContent = pasteCount > 0
+                        ? `Security Alert: Content was pasted ${pasteCount} time(s).`
+                        : '';
+                    $resultsSecurityResize.textContent = resizeCount > 0
+                        ? `Security Alert: Window was resized ${resizeCount} time(s).`
+                        : '';
+                }
+                if (!appState.scores) {
+                    $resultsSecurity.textContent = '';
+                    $resultsSecurityCopy.textContent = '';
+                    $resultsSecurityPaste.textContent = '';
+                    $resultsSecurityResize.textContent = '';
                 }
                 renderResultsDetails();
                 $startScreen.classList.remove('active');
@@ -11874,6 +11910,10 @@ document.addEventListener("DOMContentLoaded", () => {
             appState.scores = null;
             appState.completedAt = null;
             appState.focusLossCount = 0;
+            appState.copyCount = 0;
+            appState.pasteCount = 0;
+            appState.resizeCount = 0;
+            appState.isResizing = false;
             appState.testQuestions = generateTestQuestions();
             
             // Check if test generation failed
@@ -12185,17 +12225,31 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!appState.completedAt) {
             appState.completedAt = new Date().toISOString();
         }
-        const { overallPercentage, cefrLevel, focusLossCount } = appState.scores;
+        const {
+            overallPercentage,
+            cefrLevel,
+            focusLossCount = 0,
+            copyCount = 0,
+            pasteCount = 0,
+            resizeCount = 0
+        } = appState.scores;
 
         $resultsName.textContent = appState.studentName;
         $resultsScore.textContent = `Overall Score: ${overallPercentage.toFixed(1)}%`;
         $resultsCEFR.textContent = `Estimated CEFR Level: ${cefrLevel}`;
 
-        if (focusLossCount > 0) {
-            $resultsSecurity.textContent = `Security Alert: Test window lost focus ${focusLossCount} time(s).`;
-        } else {
-            $resultsSecurity.textContent = '';
-        }
+        $resultsSecurity.textContent = focusLossCount > 0
+            ? `Security Alert: Test window lost focus ${focusLossCount} time(s).`
+            : '';
+        $resultsSecurityCopy.textContent = copyCount > 0
+            ? `Security Alert: Content was copied ${copyCount} time(s).`
+            : '';
+        $resultsSecurityPaste.textContent = pasteCount > 0
+            ? `Security Alert: Content was pasted ${pasteCount} time(s).`
+            : '';
+        $resultsSecurityResize.textContent = resizeCount > 0
+            ? `Security Alert: Window was resized ${resizeCount} time(s).`
+            : '';
 
         renderResultsDetails();
 
@@ -12304,7 +12358,10 @@ document.addEventListener("DOMContentLoaded", () => {
             reflectionResponses,
             readingPassagesUsed,
             answeredQuestions,
-            focusLossCount: appState.focusLossCount
+            focusLossCount: appState.focusLossCount,
+            copyCount: appState.copyCount,
+            pasteCount: appState.pasteCount,
+            resizeCount: appState.resizeCount
         };
     }
 
@@ -12612,15 +12669,39 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.text(`Derived CEFR Level: ${scores.cefrLevel}`, pageWidth - margin, y, { align: 'right' });
             y += 10;
 
-            // --- Add Security Alert to PDF ---
+            // --- Add Security Alerts to PDF ---
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(brandRed);
+
+            let securityAlertY = y;
+            let hasAlerts = false;
+
             if (scores.focusLossCount > 0) {
-                doc.setFontSize(12);
-                doc.setFont(undefined, 'bold');
-                doc.setTextColor(brandRed);
-                doc.text(`SECURITY ALERT: Test window lost focus ${scores.focusLossCount} time(s).`, margin, y);
-                y += 10;
-                doc.setTextColor(0, 0, 0);
+                doc.text(`SECURITY ALERT: Test window lost focus ${scores.focusLossCount} time(s).`, margin, securityAlertY);
+                securityAlertY += 7;
+                hasAlerts = true;
             }
+            if (scores.copyCount > 0) {
+                doc.text(`SECURITY ALERT: Content was copied ${scores.copyCount} time(s).`, margin, securityAlertY);
+                securityAlertY += 7;
+                hasAlerts = true;
+            }
+            if (scores.pasteCount > 0) {
+                doc.text(`SECURITY ALERT: Content was pasted ${scores.pasteCount} time(s).`, margin, securityAlertY);
+                securityAlertY += 7;
+                hasAlerts = true;
+            }
+            if (scores.resizeCount > 0) {
+                doc.text(`SECURITY ALERT: Window was resized ${scores.resizeCount} time(s).`, margin, securityAlertY);
+                securityAlertY += 7;
+                hasAlerts = true;
+            }
+
+            if (hasAlerts) {
+                y = securityAlertY + 3;
+            }
+            doc.setTextColor(0, 0, 0);
 
             // --- 4. Domain Scores ---
             doc.setFontSize(14);
@@ -12876,6 +12957,33 @@ document.addEventListener("DOMContentLoaded", () => {
         if (document.hidden && $testScreen.classList.contains('active')) {
             appState.focusLossCount++;
             console.warn(`User lost focus. Count: ${appState.focusLossCount}`);
+        }
+    });
+
+    // --- Add listeners for copy, paste, and resize ---
+    document.addEventListener('copy', () => {
+        if ($testScreen.classList.contains('active')) {
+            appState.copyCount++;
+            console.warn(`User copied content. Count: ${appState.copyCount}`);
+        }
+    });
+
+    document.addEventListener('paste', () => {
+        if ($testScreen.classList.contains('active')) {
+            appState.pasteCount++;
+            console.warn(`User pasted content. Count: ${appState.pasteCount}`);
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if ($testScreen.classList.contains('active') && !appState.isResizing) {
+            appState.isResizing = true;
+            appState.resizeCount++;
+            console.warn(`User resized window. Count: ${appState.resizeCount}`);
+
+            setTimeout(() => {
+                appState.isResizing = false;
+            }, 1000);
         }
     });
 

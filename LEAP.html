@@ -11246,6 +11246,34 @@ document.addEventListener("DOMContentLoaded", () => {
         syncFullscreenLockState();
     };
 
+    const guardFullscreenExitMethod = (methodName) => {
+        const original = document[methodName];
+        if (typeof original !== 'function') {
+            return;
+        }
+
+        const boundOriginal = original.bind(document);
+        document[methodName] = (...args) => {
+            if (fullscreenExitLocked) {
+                console.warn(`Blocked ${methodName} while fullscreen exit is locked.`);
+                if (typeof Promise !== 'undefined' && typeof Promise.reject === 'function') {
+                    return Promise.reject(new Error('Fullscreen exit blocked'));
+                }
+                throw new Error('Fullscreen exit blocked');
+            }
+
+            return boundOriginal(...args);
+        };
+    };
+
+    [
+        'exitFullscreen',
+        'webkitExitFullscreen',
+        'msExitFullscreen',
+        'mozCancelFullScreen',
+        'cancelFullScreen'
+    ].forEach(guardFullscreenExitMethod);
+
     document.addEventListener('fullscreenchange', syncFullscreenLockState);
     document.addEventListener('webkitfullscreenchange', syncFullscreenLockState);
     document.addEventListener('msfullscreenchange', syncFullscreenLockState);

@@ -220,71 +220,6 @@
             75% { transform: translateX(-5px); }
         }
 
-        #results-details {
-            margin-top: 25px;
-        }
-
-        #results-details section {
-            margin-bottom: 25px;
-            background-color: #fbfbfb;
-            border: 1px solid #eee;
-            border-radius: 5px;
-            padding: 20px;
-        }
-
-        #results-details h3 {
-            margin-top: 0;
-            margin-bottom: 12px;
-            color: var(--brand-red);
-        }
-
-        .results-passage {
-            margin-bottom: 18px;
-            padding: 15px;
-            border-radius: 5px;
-            background-color: #fff;
-            border: 1px solid #eee;
-        }
-
-        .results-passage pre {
-            margin: 0;
-            white-space: pre-wrap;
-            font-family: inherit;
-            font-size: 15px;
-            line-height: 1.5;
-        }
-
-        .results-passage ul {
-            margin: 12px 0 0;
-            padding-left: 20px;
-        }
-
-        .results-passage li {
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-
-        .results-question {
-            border-bottom: 1px solid #eee;
-            padding: 12px 0;
-        }
-
-        .results-question:last-child {
-            border-bottom: none;
-        }
-
-        .results-question h4 {
-            margin: 0 0 6px;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .results-question p {
-            margin: 4px 0;
-            font-size: 15px;
-            white-space: pre-wrap;
-        }
-
     </style>
 </head>
 <body>
@@ -350,18 +285,6 @@
         <div id="results-screen" class="screen">
             <h2>Assessment Completed</h2>
             <p>Thank you, <span id="results-name"></span>. Your detailed score, security summary, and integrity verification are included in the downloadable PDF report.</p>
-
-            <div id="results-details">
-                <section id="results-passages-section">
-                    <h3>Reading Passages Reviewed</h3>
-                    <div id="results-passages"></div>
-                </section>
-
-                <section id="results-answers-section">
-                    <h3>Answered Questions</h3>
-                    <div id="results-answers"></div>
-                </section>
-            </div>
 
             <p>Download your PDF report now to share the full assessment record with your teacher.</p>
 
@@ -11552,10 +11475,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const $testValidation = $('#test-validation-message');
 
     const $resultsName = $('#results-name');
-    const $resultsPassagesSection = $('#results-passages-section');
-    const $resultsPassages = $('#results-passages');
-    const $resultsAnswersSection = $('#results-answers-section');
-    const $resultsAnswers = $('#results-answers');
     const $downloadPdfBtn = $('#download-pdf-btn');
 
     // Global application state
@@ -11680,7 +11599,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (activeScreen === 'results') {
                 $resultsScreen.classList.add('active');
                 $resultsName.textContent = appState.studentName || '';
-                renderResultsDetails();
                 $startScreen.classList.remove('active');
             } else if (activeScreen === 'test' && appState.testQuestions.length > 0) {
                 $testScreen.classList.add('active');
@@ -12147,8 +12065,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         $resultsName.textContent = appState.studentName;
 
-        renderResultsDetails();
-
         $testScreen.classList.remove('active');
         $resultsScreen.classList.add('active');
 
@@ -12371,142 +12287,6 @@ document.addEventListener("DOMContentLoaded", () => {
             finalizeLockState();
         }
     }
-
-    function renderResultsDetails() {
-        if (!$resultsPassages || !$resultsAnswers) {
-            return;
-        }
-
-        const scores = appState.scores;
-        if (!scores) {
-            $resultsPassages.innerHTML = '';
-            $resultsAnswers.innerHTML = '';
-            if ($resultsPassagesSection) {
-                $resultsPassagesSection.style.display = 'none';
-            }
-            if ($resultsAnswersSection) {
-                $resultsAnswersSection.style.display = 'none';
-            }
-            return;
-        }
-
-        const { readingPassagesUsed = [], answeredQuestions = [] } = scores;
-
-        if ($resultsPassagesSection) {
-            $resultsPassagesSection.style.display = 'block';
-        }
-        $resultsPassages.innerHTML = '';
-
-        if (readingPassagesUsed.length === 0) {
-            const message = document.createElement('p');
-            message.textContent = 'No reading passages were included in this assessment.';
-            $resultsPassages.appendChild(message);
-        } else {
-            readingPassagesUsed.forEach((passage, index) => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'results-passage';
-
-                const heading = document.createElement('h4');
-                const label = `Passage ${index + 1}${passage.passageId ? ` (ID: ${passage.passageId})` : ''}`;
-                heading.textContent = label;
-                wrapper.appendChild(heading);
-
-                const pre = document.createElement('pre');
-                const content = typeof passage.content === 'string' && passage.content.trim().length > 0
-                    ? passage.content
-                    : 'Passage text unavailable.';
-                pre.textContent = content;
-                wrapper.appendChild(pre);
-
-                if (Array.isArray(passage.questions) && passage.questions.length > 0) {
-                    const questionHeading = document.createElement('p');
-                    questionHeading.style.fontWeight = '600';
-                    questionHeading.style.marginTop = '12px';
-                    questionHeading.textContent = 'Questions answered with this passage:';
-                    wrapper.appendChild(questionHeading);
-
-                    const list = document.createElement('ul');
-                    passage.questions.forEach((q) => {
-                        const item = document.createElement('li');
-
-                        const questionLine = document.createElement('div');
-                        questionLine.textContent = `Question ${q.number}: ${q.text}`;
-                        item.appendChild(questionLine);
-
-                        const answerValue = q.userAnswer && String(q.userAnswer).trim().length > 0
-                            ? String(q.userAnswer)
-                            : 'No response recorded.';
-                        const answerLine = document.createElement('div');
-                        answerLine.textContent = `Your Answer: ${answerValue}`;
-                        item.appendChild(answerLine);
-
-                        if (q.correctAnswer) {
-                            const resultLine = document.createElement('div');
-                            if (q.isCorrect === true) {
-                                resultLine.textContent = 'Result: Correct';
-                            } else {
-                                resultLine.textContent = `Correct Answer: ${q.correctAnswer}`;
-                            }
-                            item.appendChild(resultLine);
-                        }
-
-                        list.appendChild(item);
-                    });
-                    wrapper.appendChild(list);
-                }
-
-                $resultsPassages.appendChild(wrapper);
-            });
-        }
-
-        if ($resultsAnswersSection) {
-            $resultsAnswersSection.style.display = 'block';
-        }
-        $resultsAnswers.innerHTML = '';
-
-        if (answeredQuestions.length === 0) {
-            const message = document.createElement('p');
-            message.textContent = 'No responses were recorded during this assessment.';
-            $resultsAnswers.appendChild(message);
-            return;
-        }
-
-        answeredQuestions.forEach((entry) => {
-            const questionContainer = document.createElement('div');
-            questionContainer.className = 'results-question';
-
-            const header = document.createElement('h4');
-            const domainLabel = entry.domain ? ` — ${entry.domain}` : '';
-            header.textContent = `Question ${entry.number}${domainLabel}`;
-            questionContainer.appendChild(header);
-
-            const textPara = document.createElement('p');
-            textPara.textContent = entry.text;
-            questionContainer.appendChild(textPara);
-
-            const answerPara = document.createElement('p');
-            const answerText = entry.userAnswer && String(entry.userAnswer).trim().length > 0
-                ? String(entry.userAnswer)
-                : 'No response recorded.';
-            answerPara.textContent = `Your Answer: ${answerText}`;
-            questionContainer.appendChild(answerPara);
-
-            if (entry.correctAnswer) {
-                const resultPara = document.createElement('p');
-                if (entry.isCorrect === true) {
-                    resultPara.textContent = 'Result: Correct';
-                } else if (entry.isCorrect === false) {
-                    resultPara.textContent = `Correct Answer: ${entry.correctAnswer}`;
-                } else {
-                    resultPara.textContent = `Correct Answer: ${entry.correctAnswer}`;
-                }
-                questionContainer.appendChild(resultPara);
-            }
-
-            $resultsAnswers.appendChild(questionContainer);
-        });
-    }
-
 
     // =================================================================
     // == PDF GENERATION (jsPDF)

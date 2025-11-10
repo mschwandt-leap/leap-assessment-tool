@@ -12476,6 +12476,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         passage.questions.forEach((q) => {
                             y = checkPageBreak(y);
                             const questionLines = doc.splitTextToSize(`• Question ${q.number}: ${q.text}`, contentWidth - 4);
+                            const questionColor = q.isCorrect === true
+                                ? '#2e7d32'
+                                : q.isCorrect === false
+                                    ? '#c62828'
+                                    : '#000000';
+                            doc.setTextColor(questionColor);
                             doc.text(questionLines, margin + 4, y);
                             y += questionLines.length * 4.5;
 
@@ -12495,6 +12501,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 y += resultLines.length * 4.5;
                             }
 
+                            doc.setTextColor(0, 0, 0);
                             y += 4;
                         });
                     }
@@ -12526,6 +12533,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     y = checkPageBreak(y);
                     doc.setFontSize(11);
                     doc.setFont(undefined, 'bold');
+                    const entryColor = entry.isCorrect === true
+                        ? '#2e7d32'
+                        : entry.isCorrect === false
+                            ? '#c62828'
+                            : '#000000';
+                    doc.setTextColor(entryColor);
                     const domainLabel = entry.domain ? ` — ${entry.domain}` : '';
                     doc.text(`Question ${entry.number}${domainLabel}`, margin, y);
                     y += 5;
@@ -12552,6 +12565,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         y += resultLines.length * 4.5;
                     }
 
+                    doc.setTextColor(0, 0, 0);
                     y += 6;
                 });
             }

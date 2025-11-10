@@ -12598,53 +12598,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             }
 
-            // --- 7. Incorrect Responses ---
-            y += 5;
-            y = checkPageBreak(y);
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.text("Incorrect Responses", margin, y);
-            y += 7;
-
-            scores.incorrectResponses.forEach(q => {
-                y = checkPageBreak(y);
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);
-                doc.text(`Domain: ${q.domain} (CEFR: ${q.level})`, margin, y);
-                y += 5;
-
-                doc.setFont(undefined, 'normal');
-                const qText = doc.splitTextToSize(`Q: ${q.text}`, contentWidth);
-                doc.text(qText, margin, y);
-                y += qText.length * 4.5;
-
-                const aText = doc.splitTextToSize(`Your Answer: ${q.userAnswer}`, contentWidth);
-                doc.setTextColor(brandRed);
-                doc.text(aText, margin, y);
-                y += aText.length * 4.5;
-
-                const cText = doc.splitTextToSize(`Correct Answer: ${q.answer}`, contentWidth);
-                doc.setTextColor(0, 100, 0); // Green
-                doc.text(cText, margin, y);
-                y += cText.length * 4.5;
-
-                doc.setTextColor(0, 0, 0);
-                y += 5;
-                doc.setLineWidth(0.1);
-                doc.setDrawColor(200);
-                doc.line(margin, y, pageWidth - margin, y);
-                y += 5;
-            });
-
-            if (scores.incorrectResponses.length === 0) {
-                doc.setFontSize(11);
-                doc.setFont(undefined, 'italic');
-                doc.text("No incorrect answers. Excellent work!", margin, y);
-                y += 10;
-            }
-
-            // --- 8. Areas for Improvement (Placeholder) ---
+            // --- 7. Areas for Improvement (Placeholder) ---
             y = checkPageBreak(y);
             doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
@@ -12654,27 +12608,6 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.setFont(undefined, 'normal');
             doc.text("Based on your responses, review the concepts related to the questions listed above.", margin, y);
             y += 10;
-
-            // --- 9. Reflection Responses ---
-            y = checkPageBreak(y);
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.text("Reflection Responses", margin, y);
-            y += 7;
-
-            scores.reflectionResponses.forEach(r => {
-                y = checkPageBreak(y);
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'bold');
-                const qText = doc.splitTextToSize(`Q: ${r.text}`, contentWidth);
-                doc.text(qText, margin, y);
-                y += qText.length * 4.5;
-
-                doc.setFont(undefined, 'normal');
-                const aText = doc.splitTextToSize(`A: ${r.answer}`, contentWidth);
-                doc.text(aText, margin, y);
-                y += aText.length * 4.5 + 5;
-            });
 
             // --- Finally: Add footers and Save ---
             addFooter();
